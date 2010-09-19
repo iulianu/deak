@@ -20,16 +20,21 @@ module Deak
 #  end
 
   class Account
-#    attr_accessor :security
+    attr_reader :debit_is_decrease
 
     def initialize(opts)
       @splits = []
+      @debit_is_decrease = opts[:debit_is_decrease] || false
+    end
+
+    def total_increase
+      @splits.inject(BigDecimal.new("0")) do |increase, split|
+        increase += split.amount
+      end
     end
 
     def balance
-      @splits.inject(BigDecimal.new("0")) do |balance, split|
-        balance += split.amount
-      end
+      total_increase * (@debit_is_decrease ? -1 : 1)
     end
 
     def record_split!( split )
@@ -75,10 +80,17 @@ module Deak
 
     def add_transaction!( opts={} )
       txn = Transaction.new
-      txn.add_split! :account => opts[:decrease_account],
-                     :amount  => - BigDecimal.new(opts[:amount])
-      txn.add_split! :account => opts[:increase_account],
-                     :amount  => BigDecimal.new(opts[:amount])
+      if opts[:debit_account] && opts[:credit_account]
+        txn.add_split! :account => opts[:credit_account],
+                       :amount  => - BigDecimal.new(opts[:amount])
+        txn.add_split! :account => opts[:debit_account],
+                       :amount  => BigDecimal.new(opts[:amount])
+      else
+        txn.add_split! :account => opts[:decrease_account],
+                       :amount  => - BigDecimal.new(opts[:amount])
+        txn.add_split! :account => opts[:increase_account],
+                       :amount  => BigDecimal.new(opts[:amount])
+      end
       record_transaction!( txn )
     end
 
