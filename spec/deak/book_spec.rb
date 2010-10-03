@@ -56,5 +56,32 @@ module Deak
 
     end
 
+    describe "splits" do
+
+      before(:each) do
+        @act_card      = @book.add_account!( :name => "Card" )
+        @act_groceries = @book.add_account!( :name => "Groceries" )
+        @act_transport = @book.add_account!( :name => "Transport" )
+      end
+
+      it "should add split transaction" do
+        @book.add_transaction!( [{:amount => "120", :decrease_account => @act_card},
+                                 {:amount => "80",  :increase_account => @act_groceries},
+                                 {:amount => "40",  :increase_account => @act_transport}] )
+        @act_card.total_increase.should == -120
+        @act_groceries.total_increase.should == 80
+        @act_transport.total_increase.should == 40
+      end
+
+      it "should fail when splits are not balanced" do
+        expect {
+          @book.add_transaction!( [{:amount => "120", :decrease_account => @act_card},
+                                  {:amount => "60",  :increase_account => @act_groceries},
+                                  {:amount => "40",  :increase_account => @act_transport}] )
+        }.to raise_error
+      end
+
+    end
+
   end
 end

@@ -54,6 +54,14 @@ module Deak
       @splits << split
       split
     end
+
+    def balanced?
+      net_increase == 0
+    end
+
+    def net_increase
+      @splits.inject(0) {|net_increase, split| net_increase + split.amount}
+    end
   end
 
   class Split
@@ -80,21 +88,40 @@ module Deak
 
     def add_transaction!( opts={} )
       txn = Transaction.new
-      if opts[:debit_account] && opts[:credit_account]
-        txn.add_split! :account => opts[:credit_account],
-                       :amount  => - BigDecimal.new(opts[:amount])
-        txn.add_split! :account => opts[:debit_account],
-                       :amount  => BigDecimal.new(opts[:amount])
-      else
-        txn.add_split! :account => opts[:decrease_account],
-                       :amount  => - BigDecimal.new(opts[:amount])
-        txn.add_split! :account => opts[:increase_account],
-                       :amount  => BigDecimal.new(opts[:amount])
+
+      if opts.kind_of?(Array)
+
+        opts.each do |split_spec|
+          amount = BigDecimal.new(split_spec[:amount])
+          if split_spec[:increase_account]
+            account_key = :increase_account
+          elsif split_spec[:decrease_account]
+            account_key = :decrease_account
+            amount = - amount
+          end
+          txn.add_split! :account => split_spec[account_key],
+                         :amount  => amount
+        end
+
+      elsif opts.kind_of?(Hash)
+
+        if opts[:debit_account] && opts[:credit_account]
+          txn.add_split! :account => opts[:credit_account],
+                         :amount  => - BigDecimal.new(opts[:amount])
+          txn.add_split! :account => opts[:debit_account],
+                         :amount  => BigDecimal.new(opts[:amount])
+        else
+          txn.add_split! :account => opts[:decrease_account],
+                         :amount  => - BigDecimal.new(opts[:amount])
+          txn.add_split! :account => opts[:increase_account],
+                         :amount  => BigDecimal.new(opts[:amount])
+        end
       end
       record_transaction!( txn )
     end
 
     def record_transaction!( txn )
+      raise RuntimeError unless txn.balanced?
       txn.splits.each do |split|
         split.account.record_split!(split)
       end
