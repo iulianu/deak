@@ -2,24 +2,23 @@
 
 require 'rubygems'
 require 'rake/gempackagetask'
-gem 'rspec', '>= 1.3.0'
-require 'spec/rake/spectask'
+gem 'rspec', '>= 2.0.0'
+require 'rspec/core/rake_task'
 
-Spec::Rake::SpecTask.new do |t|
-  t.libs << 'lib'
-  t.spec_opts = ["--color" ]
+RSpec::Core::RakeTask.new do |t|
+#  t.spec_opts = ["--color" ]
 end
 
 PKG_VERSION='0.0.1'
 
 spec = Gem::Specification.new do |s|
   s.platform = Gem::Platform::RUBY
-  s.summary = "GSM library"
-  s.name = 'gsm'
+  s.summary = "DEAK"
+  s.name = 'deak'
   s.version = PKG_VERSION
   s.requirements << 'none'
   s.require_path = 'lib'
-  s.autorequire = 'gsm.rb'
+  s.autorequire = 'deak.rb'
   s.files      = FileList["{bin,docs,lib,test}/**/*"].exclude("rdoc").to_a
   s.description = <<EOF
 Description goes here
