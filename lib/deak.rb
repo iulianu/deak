@@ -4,26 +4,13 @@ require 'bigdecimal'
 
 module Deak
 
-#  class Security
-#
-#  end
-#
-#  class Currency < Security
-#    
-#    def self.iso(iso_code)
-#      Currency.new :code => iso_code
-#    end
-#
-#    def initialize( attrs={} )
-#      @code = attrs[:code]
-#    end
-#  end
-
   class Account
     attr_reader :debit_is_decrease
+    attr_reader :currency
 
     def initialize(opts)
       @splits = []
+      @currency = opts[:currency]
       @debit_is_decrease = opts[:debit_is_decrease] || false
     end
 
@@ -60,27 +47,33 @@ module Deak
     end
 
     def net_increase
-      @splits.inject(0) {|net_increase, split| net_increase + split.amount}
+      @splits.inject(0) {|net_increase, split| net_increase + split.base_amount}
     end
+
   end
 
   class Split
-    attr_reader :account, :amount
+    attr_reader :account
+    attr_reader :base_amount # Amount in base currency
+    attr_reader :amount      # Amount in the account's currency
 
     def initialize( opts )
       @account = opts[:account]
       @amount  = opts[:amount]
+      @base_amount = opts[:base_amount] || @amount
     end
   end
 
   class Book
 
-    def initialize
+    def initialize(opts)
       @accounts = []
       @transactions = []
+      @default_currency = opts[:default_currency]
     end
 
     def add_account!( opts={} )
+      opts[:currency] ||= @default_currency
       account = Account.new(opts)
       @accounts << account
       account
@@ -90,32 +83,53 @@ module Deak
       txn = Transaction.new
 
       if opts.kind_of?(Array)
+        
+        base_currency = opts.detect {|split_spec| split_spec[:decrease_account]}[:decrease_account].currency
 
         opts.each do |split_spec|
           amount = BigDecimal.new(split_spec[:amount])
           if split_spec[:increase_account]
-            account_key = :increase_account
+            account = split_spec[:increase_account]
           elsif split_spec[:decrease_account]
-            account_key = :decrease_account
+            account = split_spec[:decrease_account]
             amount = - amount
           end
-          txn.add_split! :account => split_spec[account_key],
-                         :amount  => amount
+
+          base_amount = nil
+          if account.currency != base_currency
+            raise RuntimeError.new unless split_spec[:converted_amount]
+            base_amount = amount
+            amount = BigDecimal.new(split_spec[:converted_amount])
+          end
+
+          txn.add_split! :account => account,
+                         :amount  => amount,
+                         :base_amount => base_amount
         end
 
       elsif opts.kind_of?(Hash)
 
+        amount = BigDecimal.new(opts[:amount])
         if opts[:debit_account] && opts[:credit_account]
-          txn.add_split! :account => opts[:credit_account],
-                         :amount  => - BigDecimal.new(opts[:amount])
-          txn.add_split! :account => opts[:debit_account],
-                         :amount  => BigDecimal.new(opts[:amount])
+          decrease_account = opts[:credit_account]
+          increase_account = opts[:debit_account]
         else
-          txn.add_split! :account => opts[:decrease_account],
-                         :amount  => - BigDecimal.new(opts[:amount])
-          txn.add_split! :account => opts[:increase_account],
-                         :amount  => BigDecimal.new(opts[:amount])
+          decrease_account = opts[:decrease_account]
+          increase_account = opts[:increase_account]
         end
+
+        increase_amount = amount
+        if increase_account.currency != decrease_account.currency
+          # Multiple currency transaction
+          raise RuntimeError unless opts[:converted_amount]
+          increase_amount = BigDecimal.new(opts[:converted_amount])
+        end
+
+        txn.add_split! :account => decrease_account,
+                       :amount  => - amount
+        txn.add_split! :account => increase_account,
+                       :amount  => increase_amount,
+                       :base_amount => amount
       end
       record_transaction!( txn )
     end

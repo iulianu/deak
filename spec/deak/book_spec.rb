@@ -6,7 +6,7 @@ module Deak
   describe Book do
 
     before(:each) do
-      @book = Book.new
+      @book = Book.new :default_currency => "RON"
     end
 
     it "should add a simple transaction" do
@@ -78,6 +78,42 @@ module Deak
           @book.add_transaction!( [{:amount => "120", :decrease_account => @act_card},
                                   {:amount => "60",  :increase_account => @act_groceries},
                                   {:amount => "40",  :increase_account => @act_transport}] )
+        }.to raise_error
+      end
+
+    end
+
+    describe "multiple currencies" do
+
+      before(:each) do
+        @act_card      = @book.add_account!( :name => "Card", :currency => "RON" )
+        @act_groceries = @book.add_account!( :name => "Groceries", :currency => "RON" )
+        @act_rent      = @book.add_account!( :name => "Rent", :currency => "EUR")
+      end
+
+      it "should convert currencies" do
+        @book.add_transaction! :amount => "860",
+                               :decrease_account => @act_card,
+                               :increase_account => @act_rent,
+                               :converted_amount => "210"
+        @act_card.balance.should == -860
+        @act_rent.balance.should == 210
+      end
+
+      it "should convert currencies in split transactions" do
+        @book.add_transaction!( [{:amount => "980", :decrease_account => @act_card},
+                                 {:amount => "120", :increase_account => @act_groceries},
+                                 {:amount => "860", :increase_account => @act_rent, :converted_amount => "210"}] )
+        @act_card.balance.should == -980
+        @act_groceries.balance.should == 120
+        @act_rent.balance.should == 210
+      end
+
+      it "should fail when not specifying converted amount" do
+        expect {
+          @book.add_transaction! :amount => "860",
+                                :decrease_account => @act_card,
+                                :increase_account => @act_rent
         }.to raise_error
       end
 
